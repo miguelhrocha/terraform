@@ -2,6 +2,7 @@ package cloud
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -24,6 +25,7 @@ import (
 
 	"github.com/hashicorp/terraform/internal/backend"
 	"github.com/hashicorp/terraform/internal/command/jsonformat"
+	"github.com/hashicorp/terraform/internal/configs/configload"
 	"github.com/hashicorp/terraform/internal/configs/configschema"
 	"github.com/hashicorp/terraform/internal/plans"
 	"github.com/hashicorp/terraform/internal/states/statemgr"
@@ -680,7 +682,25 @@ func (b *Cloud) Operation(ctx context.Context, op *backend.Operation) (*backend.
 		// Record that we're forced to run operations locally to allow the
 		// command package UI to operate correctly
 		b.forceLocal = true
-		return b.local.Operation(ctx, op)
+		// upload modules.json
+		result, err := b.local.Operation(ctx, op)
+		if err != nil {
+			return nil, err
+		}
+
+		if op.Type == backend.OperationTypeApply {
+			b.opLock.Lock()
+
+			go func() {
+				defer b.opLock.Unlock()
+				err = b.PersistModulesManifest(ctx, *op.ConfigLoader, w)
+				if err != nil {
+					return
+				}
+			}()
+		}
+
+		return result, nil
 	}
 
 	// Set the remote workspace name.
@@ -780,6 +800,32 @@ func (b *Cloud) Operation(ctx context.Context, op *backend.Operation) (*backend.
 
 	// Return the running operation.
 	return runningOp, nil
+}
+
+type TFEModulesManifestCreateOptions struct {
+	Run *tfe.Run
+
+	// Required
+	JSONModulesManifest *string `jsonapi:"attr,json-modules-manifest,omitempty"`
+}
+
+func (b *Cloud) PersistModulesManifest(ctx context.Context, loader configload.Loader, workspace *tfe.Workspace) error {
+	jsonModulesManifest, err := json.Marshal(loader.ModulesManifest())
+	if err != nil {
+		return err
+	}
+
+	payload := TFEModulesManifestCreateOptions{
+		JSONModulesManifest: tfe.String(string(jsonModulesManifest)),
+	}
+
+	runID := os.Getenv("TFE_RUN_ID")
+	if runID != "" {
+		payload.Run = &tfe.Run{ID: runID}
+	}
+
+	// tfeClient.ModuleManifest.Upsert(ctx, workspace, payload)
+	return nil
 }
 
 func (b *Cloud) cancel(cancelCtx context.Context, op *backend.Operation, r *tfe.Run) error {

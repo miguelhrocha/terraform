@@ -6,6 +6,7 @@ import (
 
 	"github.com/hashicorp/terraform-svchost/disco"
 	"github.com/hashicorp/terraform/internal/configs"
+	"github.com/hashicorp/terraform/internal/modsdir"
 	"github.com/hashicorp/terraform/internal/registry"
 	"github.com/spf13/afero"
 )
@@ -75,6 +76,10 @@ func NewLoader(config *Config) (*Loader, error) {
 // the local cache of remote module packages.
 func (l *Loader) ModulesDir() string {
 	return l.modules.Dir
+}
+
+func (l *Loader) ModulesManifest() modsdir.Manifest {
+	return l.modules.manifest
 }
 
 // RefreshModules updates the in-memory cache of the module manifest from the
