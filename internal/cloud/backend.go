@@ -2,6 +2,7 @@ package cloud
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -803,16 +804,16 @@ type TFEModulesManifestCreateOptions struct {
 }
 
 func (b *Cloud) PersistWorkspaceModuleDependency(ctx context.Context, workspace *tfe.Workspace, modules WorkspaceModules) error {
-	// jsonModulesManifest, err := json.Marshal(modules)
-	// if err != nil {
-	// 	return err
-	// }
+	jsonModulesManifest, err := json.Marshal(modules)
+	if err != nil {
+		return err
+	}
 
-	// payload := TFEModulesManifestCreateOptions{
-	// 	JSONModulesManifest: tfe.String(string(jsonModulesManifest)),
-	// }
+	payload := TFEModulesManifestCreateOptions{
+		JSONModulesManifest: tfe.String(string(jsonModulesManifest)),
+	}
 
-	// tfeClient.ModuleManifest.Upsert(ctx, workspace, payload)
+	tfeClient.ModuleManifest.Upsert(ctx, workspace, payload)
 	return nil
 }
 
